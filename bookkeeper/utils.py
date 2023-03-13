@@ -1,13 +1,7 @@
 """
 Вспомогательные функции
 """
-import sqlite3
 from typing import Iterable, Iterator
-
-from bookkeeper.models.budget import Budget
-from bookkeeper.models.category import Category
-from bookkeeper.models.expense import Expense
-from bookkeeper.repository.abstract_repository import AbstractRepository
 
 DB_PATH = '../resources/database.db'
 

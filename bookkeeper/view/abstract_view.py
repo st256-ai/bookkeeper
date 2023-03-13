@@ -1,3 +1,7 @@
+"""
+Модуль содержит в себе класс AbstractView
+"""
+
 from typing import Protocol, Callable
 
 from bookkeeper.models.budget import Budget
@@ -6,6 +10,9 @@ from bookkeeper.models.expense import Expense
 
 
 class AbstractView(Protocol):
+    """
+    Интерфейс для взаимодействия UI и логики приложения
+    """
     def run(self) -> None:
         pass
 

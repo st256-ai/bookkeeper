@@ -1,3 +1,7 @@
+"""
+Модуль содержит некоторые общие классы
+"""
+
 from PySide6 import QtWidgets, QtCore, QtGui
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtWidgets import QHeaderView
@@ -6,6 +10,9 @@ from bookkeeper.models.budget import Budget
 
 
 class DateWidget(QtWidgets.QDateEdit):
+    """
+    Виджет для выбора даты
+    """
     def __init__(self, date: QtCore.QDate = QtCore.QDate.currentDate()) -> None:
         super().__init__(date)
         self.setCalendarPopup(True)
@@ -16,6 +23,9 @@ class DateWidget(QtWidgets.QDateEdit):
 
 
 class EditButton(QtWidgets.QPushButton):
+    """
+    Кнопка для редактирования
+    """
     edit_icon = None
 
     @classmethod
@@ -33,6 +43,9 @@ class EditButton(QtWidgets.QPushButton):
 
 
 class BudgetWidget(QtWidgets.QWidget):
+    """
+    Визуализация бюджета
+    """
     def __init__(self) -> None:
         super().__init__()
         self.table = QtWidgets.QTableWidget(3, 2)

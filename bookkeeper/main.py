@@ -18,6 +18,7 @@ class Bookkeeper:
     """
     Presenter с графическим интерфейсом
     """
+
     def __init__(self, view: AbstractView,
                  category_repo: AbstractRepository[Category],
                  expense_repo: AbstractRepository[Expense],
@@ -90,7 +91,7 @@ exp_repo = SQLiteRepository[Expense](DB_PATH, Expense)
 bud_repo = SQLiteRepository[Budget](DB_PATH, Budget)
 
 bk = Bookkeeper(app_view, cat_repo, exp_repo, bud_repo)
-#if db_init_needed:
-bk.init_db()
+if db_init_needed:
+    bk.init_db()
 
 bk.run()

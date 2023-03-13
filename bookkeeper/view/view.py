@@ -1,3 +1,7 @@
+"""
+Промежуточный модуль, отгораживающий логику от
+ визуализации
+"""
 import sys
 from typing import Callable
 from PySide6 import QtWidgets
@@ -10,6 +14,9 @@ from bookkeeper.view.main_window import MainWindow
 
 
 class View(AbstractView):
+    """
+    Класс реализующий View
+    """
     def __init__(self) -> None:
         self.app = QtWidgets.QApplication(sys.argv)
         self.window = MainWindow()

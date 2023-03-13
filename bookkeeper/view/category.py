@@ -1,3 +1,7 @@
+"""
+Модуль для визуализации таблицы категорий
+"""
+
 from PySide6 import QtWidgets, QtCore
 from PySide6.QtWidgets import QHeaderView, QAbstractItemView
 
@@ -6,6 +10,9 @@ from bookkeeper.view.common import EditButton
 
 
 class CategoryWidget(QtWidgets.QWidget):
+    """
+    Класс предоставляет доступ к таблице категорий
+    """
     activate_editing_mode_signal = QtCore.Signal(int)
 
     def __init__(self) -> None:
@@ -40,6 +47,9 @@ class CategoryWidget(QtWidgets.QWidget):
 
 
 class AddCategoryWidget(QtWidgets.QWidget):
+    """
+    Форма для добавления новых записей в таблицу категорий
+    """
     cancel_signal = QtCore.Signal()
     delete_signal = QtCore.Signal(int)
     update_signal = QtCore.Signal(Category)

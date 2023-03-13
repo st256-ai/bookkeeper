@@ -54,7 +54,7 @@ class MainWindow(QMainWindow):
 
         main_tab = QWidget()
         category_tab = QWidget()
-        tabs.addTab(main_tab, "Траты")
+        tabs.addTab(main_tab, "Расходы")
         tabs.addTab(category_tab, "Категории")
 
         main_layout = QVBoxLayout(main_tab)

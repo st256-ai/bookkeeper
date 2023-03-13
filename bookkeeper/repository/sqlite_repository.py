@@ -33,9 +33,9 @@ class SQLiteRepository(AbstractRepository[T]):
             for f_name, f_type in self.fields.items()
         ]
 
+        definitions = ", ".join(definition_strings + ["pk INTEGER PRIMARY KEY"])
         self.create_sql = f'CREATE TABLE IF NOT EXISTS {self.table_name} (' \
-                     + f'{", ".join(definition_strings + ["pk INTEGER PRIMARY KEY"])}' \
-                     + ')'
+                          + f'{definitions}' + ')'
         self.init_model_table()
 
         names = ", ".join(self.fields.keys())
@@ -50,7 +50,7 @@ class SQLiteRepository(AbstractRepository[T]):
             'delete': f"DELETE FROM {self.table_name} WHERE ROWID = ?",
         }
 
-    def init_model_table(self):
+    def init_model_table(self) -> None:
         with self.connect() as con:
             cur = con.cursor()
             cur.execute('PRAGMA foreign_keys = ON')
