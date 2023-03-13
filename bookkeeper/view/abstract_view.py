@@ -15,8 +15,32 @@ class AbstractView(Protocol):
     def set_budget_list(self, categories: list[Budget]) -> None:
         pass
 
-    def update_consumptions(self, consumptions: list[int]) -> None:
+    def set_expense_list(self, categories: list[Expense]) -> None:
         pass
 
-    def set_expense_list(self, categories: list[Expense]) -> None:
+    def register_category_creator(self, handler: Callable[[Category], int]) -> None:
+        pass
+
+    def register_category_updater(self, handler: Callable[[Category], None]) -> None:
+        pass
+
+    def register_category_deleter(self, handler: Callable[[int], None]) -> None:
+        pass
+
+    def register_budget_creator(self, handler: Callable[[Budget], int]) -> None:
+        pass
+
+    def register_budget_updater(self, handler: Callable[[Budget], None]) -> None:
+        pass
+
+    def register_budget_deleter(self, handler: Callable[[int], None]) -> None:
+        pass
+
+    def register_expense_creator(self, handler: Callable[[Expense], int]) -> None:
+        pass
+
+    def register_expense_updater(self, handler: Callable[[Expense], None]) -> None:
+        pass
+
+    def register_expense_deleter(self, handler: Callable[[int], None]) -> None:
         pass

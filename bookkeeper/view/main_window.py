@@ -1,79 +1,172 @@
+from datetime import datetime, timedelta
 from typing import Callable
 
 from PySide6 import QtWidgets
-from PySide6.QtWidgets import QMainWindow
 
-from bookkeeper.models.budget import Budget, Period
+from bookkeeper.models.budget import Budget
 from bookkeeper.models.category import Category
 from bookkeeper.models.expense import Expense
-from bookkeeper.view.budget import BudgetWidget
-from bookkeeper.view.category import CategoryWidget
-from bookkeeper.view.expense import ExpenseWidget
+from bookkeeper.view.common import BudgetWidget
+from bookkeeper.view.category import CategoryWidget, AddCategoryWidget
+from bookkeeper.view.expense import ExpensesWidget, AddExpensesWidget
 
 
-class MainWindow(QMainWindow):
+class MainWindow(QtWidgets.QMainWindow):
+    DAY = 1
+    WEEK = 7
+    MONTH = 30
 
-    def __init__(self,
-                 category_creator: Callable[[Category], int],
-                 category_deleter: Callable[[int], None],
-                 budget_updater: Callable[[Budget], None],
-                 expense_getter: Callable[[int], Expense],
-                 expense_creator: Callable[[Expense], int],
-                 expense_updater: Callable[[Expense], None],
-                 expense_deleter: Callable[[Expense], None]):
+    def __init__(self) -> None:
         super().__init__()
-        self.category_creator = category_creator
-        self.category_deleter = category_deleter
-        self.budget_updater = budget_updater
-        self.expense_getter = expense_getter
-        self.expense_creator = expense_creator
-        self.expense_updater = expense_updater
-        self.expense_deleter = expense_deleter
+        self.category_id_name_mapping: dict[int, str] = dict()
+        self.category_name_id_mapping: dict[str, int] = dict()
+        self.categories: list[Category] = []
+        self.budgets: list[Budget] = []
+        self.expenses: list[Expense] = []
+        self.category_creator: Callable[[Category], int] = lambda x: -1
+        self.category_updater: Callable[[Category], None] = lambda x: None
+        self.category_deleter: Callable[[int], None] = lambda x: None
+        self.budget_creator: Callable[[Budget], int] = lambda x: -1
+        self.budget_updater: Callable[[Budget], None] = lambda x: None
+        self.budget_deleter: Callable[[int], None] = lambda x: None
+        self.expense_creator: Callable[[Expense], int] = lambda x: -1
+        self.expense_updater: Callable[[Expense], None] = lambda x: None
+        self.expense_deleter: Callable[[int], None] = lambda x: None
 
-        self.expense_widget = ExpenseWidget(self.expense_creator,
-                                            self.expense_updater,
-                                            self.expense_deleter,
-                                            self.expense_getter)
-        self.budget_widget = BudgetWidget(self.budget_updater)
-        self.category_widget = CategoryWidget()
+        self.setWindowTitle('Bookkeeper')
+        self.setFixedSize(800, 800)
 
-        layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(self.expense_widget)
-        layout.addWidget(self.budget_widget)
-        layout.addWidget(self.category_widget)
+        central_widget = QtWidgets.QWidget(self)
+        self.setCentralWidget(central_widget)
 
-        box = QtWidgets.QGroupBox()
-        box.setLayout(layout)
-        self.setCentralWidget(box)
+        tabs = QtWidgets.QTabWidget(central_widget)
+        tabs.resize(self.size())
 
-    # TODO IMPLEMENT
+        main_tab = QtWidgets.QWidget()
+        category_tab = QtWidgets.QWidget()
+        tabs.addTab(main_tab, "Траты")
+        tabs.addTab(category_tab, "Категории")
+
+        main_layout = QtWidgets.QVBoxLayout(main_tab)
+        self.expenses_table = ExpensesWidget()
+        self.budget_table = BudgetWidget()
+        self.add_expense = AddExpensesWidget()
+
+        main_layout.addWidget(self.expenses_table)
+        main_layout.addWidget(self.budget_table)
+        main_layout.addWidget(self.add_expense)
+
+        category_layout = QtWidgets.QVBoxLayout(category_tab)
+        self.category_table = CategoryWidget()
+        self.add_category = AddCategoryWidget()
+
+        category_layout.addWidget(self.category_table)
+        category_layout.addWidget(self.add_category)
+
+        self.expenses_table.activate_editing_mode_signal.connect(
+            self.activate_expense_editing_mode)
+        self.add_expense.cancel_signal.connect(self.deactivate_expense_editing_mode)
+        self.add_expense.delete_signal.connect(self.delete_expense)
+        self.add_expense.update_signal.connect(self.update_expense)
+        self.add_expense.create_signal.connect(self.create_expense)
+
+        self.category_table.activate_editing_mode_signal.connect(
+            self.activate_category_editing_mode)
+        self.add_category.cancel_signal.connect(self.deactivate_category_editing_mode)
+        self.add_category.delete_signal.connect(self.delete_category)
+        self.add_category.update_signal.connect(self.update_category)
+        self.add_category.create_signal.connect(self.create_category)
+
+        self.budget_table.table.itemChanged.connect(self.on_budget_item_changed)
+
+    def activate_expense_editing_mode(self, row_index: int) -> None:
+        self.expenses_table.set_edit_buttons_active(False)
+        self.add_expense.activate_editing_mode(
+            self.expenses[row_index],
+            self.category_id_name_mapping[self.expenses[row_index].category])
+
+    def deactivate_expense_editing_mode(self) -> None:
+        self.expenses_table.set_edit_buttons_active(True)
+        self.add_expense.deactivate_editing_mode()
+
+    def delete_expense(self, pk: int) -> None:
+        self.expense_deleter(pk)
+        self.deactivate_expense_editing_mode()
+
+    def update_expense(self, expense: Expense, cat: str) -> None:
+        expense.category = self.category_name_id_mapping[cat]
+        self.expense_updater(expense)
+        self.deactivate_expense_editing_mode()
+
+    def create_expense(self, expense: Expense, cat: str) -> None:
+        expense.category = self.category_name_id_mapping[cat]
+        self.expense_creator(expense)
+
+    def activate_category_editing_mode(self, row_index: int) -> None:
+        self.category_table.set_edit_buttons_active(False)
+        self.add_category.activate_editing_mode(
+            self.categories[row_index])
+
+    def deactivate_category_editing_mode(self) -> None:
+        self.category_table.set_edit_buttons_active(True)
+        self.add_category.deactivate_editing_mode()
+
+    def delete_category(self, pk: int) -> None:
+        self.category_deleter(pk)
+        self.deactivate_category_editing_mode()
+
+    def update_category(self, category: Category) -> None:
+        self.category_updater(category)
+        self.deactivate_category_editing_mode()
+
     def create_category(self, category: Category) -> None:
-        pass
+        print('create_category')
+        self.category_creator(category)
 
-    # TODO IMPLEMENT
     def set_category_list(self, categories: list[Category]) -> None:
-        pass
+        self.categories = categories
+        self.category_id_name_mapping = {c.pk: c.name for c in categories}
+        self.category_name_id_mapping = {c.name: c.pk for c in categories}
+        self.add_expense.cat_input.clear()
+        self.add_expense.cat_input.addItems([c.name for c in categories])
+        self.category_table.set_data(categories)
 
     def set_budget_list(self, budgets: list[Budget]) -> None:
-        d_budget, w_budget, m_budget = [0, 0, 0]
-        d_expense, w_expense, m_expense = [0, 0, 0]
-
-        for bud in budgets:
-            if bud.period == Period.DAY.name:
-                d_budget = bud.total_amount
-                d_expense = bud.consumed_amount
-            if bud.period == Period.WEEK.name:
-                w_budget = bud.total_amount
-                w_expense = bud.consumed_amount
-            if bud.period == Period.MONTH.name:
-                m_budget = bud.total_amount
-                m_expense = bud.consumed_amount
-        self.budget_widget.set_budgets([d_budget, w_budget, m_budget])
-        self.budget_widget.set_consumptions([d_expense, w_expense, m_expense])
+        self.budgets = budgets
+        for_day = self.get_bud_by_cat_and_dur(budgets, None, self.DAY)
+        for_week = self.get_bud_by_cat_and_dur(budgets, None, self.WEEK)
+        for_month = self.get_bud_by_cat_and_dur(budgets, None, self.MONTH)
+        self.budget_table.set_budgets([for_day, for_week, for_month])
 
     def set_expense_list(self, expenses: list[Expense]) -> None:
-        pass
+        self.expenses = expenses
+        self.expenses_table.set_data(expenses, self.category_id_name_mapping)
+        day_ex, week_ex, month_ex = 0, 0, 0
+        today = datetime.now()
+        for ex in expenses:
+            if ex.expense_date >= today - timedelta(days=self.DAY):
+                day_ex += ex.amount
+            if ex.expense_date >= today - timedelta(days=self.WEEK):
+                week_ex += ex.amount
+            if ex.expense_date >= today - timedelta(days=self.MONTH):
+                month_ex += ex.amount
+        self.budget_table.set_expenses([day_ex, week_ex, month_ex])
 
-    def update_consumptions(self, consumptions: list[int]) -> None:
-        self.budget_widget.set_consumptions(
-            [consumptions[0], consumptions[1], consumptions[2]])
+    def on_budget_item_changed(self, item: QtWidgets.QTableWidgetItem) -> None:
+        old_budgets = self.budget_table.budgets
+        if item.column() == 1 and item.text() != '':
+            if old_budgets[item.row()] is None:
+                new_budget = Budget([self.DAY, self.WEEK, self.MONTH][item.row()],
+                                    None, int(item.text()))
+                self.budget_creator(new_budget)
+            elif item.text() != str(old_budgets[item.row()].amount):
+                new_budget = old_budgets[item.row()]
+                new_budget.amount = int(item.text())
+                self.budget_updater(new_budget)
+
+    @staticmethod
+    def get_bud_by_cat_and_dur(
+            budgets: list[Budget], cat: int | None, duration: int) -> Budget:
+        return next(
+            (b for b in budgets if b.duration == duration and b.category == cat),
+            None)

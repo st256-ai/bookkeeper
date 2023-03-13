@@ -1,89 +1,124 @@
-from PySide6 import QtWidgets
-from PySide6.QtCore import Slot
+from PySide6 import QtWidgets, QtCore
+from PySide6.QtWidgets import QHeaderView, QAbstractItemView
+
+from bookkeeper.models.category import Category
+from bookkeeper.view.common import EditButton
 
 
 class CategoryWidget(QtWidgets.QWidget):
+    activate_editing_mode_signal = QtCore.Signal(int)
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        modify_button = QtWidgets.QPushButton("Редактировать категории")
-        modify_button.clicked.connect(self.modify_categories)
+        self.table = QtWidgets.QTableWidget(20, 4)
 
-        layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(modify_button)
-        self.setLayout(layout)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(QtWidgets.QLabel('Категории'))
+        layout.addWidget(self.table)
 
-    @Slot()
-    def modify_categories(self):
-        modify_form = AddCategoryForm()
-        modify_form.exec()
+        self.table.setHorizontalHeaderLabels([''] + "ID Родитель Название".split())
+        self.table.verticalHeader().hide()
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+
+    def set_data(self, categories: list[Category]) -> None:
+        self.table.setRowCount(len(categories))
+        for i, cat in enumerate(categories):
+            self.table.setCellWidget(i, 0,
+                                     EditButton(i, self.activate_editing_mode_signal))
+            self.table.setItem(i, 1, QtWidgets.QTableWidgetItem(str(cat.pk)))
+            self.table.setItem(i, 2, QtWidgets.QTableWidgetItem(str(cat.parent)))
+            self.table.setItem(i, 3, QtWidgets.QTableWidgetItem(cat.name))
+
+    def set_edit_buttons_active(self, is_active: bool) -> None:
+        for i in range(self.table.rowCount()):
+            self.table.cellWidget(i, 0).setDisabled(not is_active)
 
 
-class AddCategoryForm(QtWidgets.QDialog):
+class AddCategoryWidget(QtWidgets.QWidget):
+    cancel_signal = QtCore.Signal()
+    delete_signal = QtCore.Signal(int)
+    update_signal = QtCore.Signal(Category)
+    create_signal = QtCore.Signal(Category)
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
+        self.cur_category: Category | None = None
+        layout = QtWidgets.QVBoxLayout(self)
 
-        layout = QtWidgets.QFormLayout()
+        name_layout = QtWidgets.QHBoxLayout()
+        parent_layout = QtWidgets.QHBoxLayout()
 
-        parent_label = QtWidgets.QLabel("Категория-родитель")
+        label = QtWidgets.QLabel('Родитель')
+        label.setFixedWidth(100)
+        parent_layout.addWidget(label)
         self.parent_input = QtWidgets.QLineEdit()
-        layout.addRow(parent_label, self.parent_input)
+        parent_layout.addWidget(self.parent_input)
 
-        category_label = QtWidgets.QLabel("Новая категория")
-        self.category_input = QtWidgets.QLineEdit()
-        layout.addRow(category_label, self.category_input)
+        label = QtWidgets.QLabel('Название')
+        label.setFixedWidth(100)
+        name_layout.addWidget(label)
+        self.name_input = QtWidgets.QLineEdit()
+        name_layout.addWidget(self.name_input)
 
-        self.buttonBox = QtWidgets.QDialogButtonBox()
-        self._register_buttons()
-        layout.addWidget(self.buttonBox)
+        layout.addWidget(QtWidgets.QLabel('Добавить новую категорию'))
+        layout.addLayout(name_layout)
+        layout.addLayout(parent_layout)
 
-        self.setLayout(layout)
+        self.add_button = QtWidgets.QPushButton('Добавить')
+        self.cancel_button = QtWidgets.QPushButton('Отмена')
+        self.delete_button = QtWidgets.QPushButton('Удалить')
+        self.update_button = QtWidgets.QPushButton('Сохранить')
 
-    @Slot()
-    def ok_button_click(self):
-        # self.is_ok_clicked = True
-        self.accept()
+        self.add_button.clicked.connect(self.exec_create)
+        self.cancel_button.clicked.connect(lambda _: self.cancel_signal.emit())
+        self.delete_button.clicked.connect(
+            lambda _: self.delete_signal.emit(self.cur_category.pk))
+        self.update_button.clicked.connect(self.exec_update)
 
-    def _register_buttons(self):
-        ok_button = QtWidgets.QDialogButtonBox.StandardButton.Ok
-        cancel_button = QtWidgets.QDialogButtonBox.StandardButton.Cancel
-        self.buttonBox.addButton(ok_button)
-        self.buttonBox.addButton(cancel_button)
+        self.edit_buttons_layout = QtWidgets.QHBoxLayout()
+        self.edit_buttons_layout.addWidget(self.cancel_button)
+        self.edit_buttons_layout.addWidget(self.delete_button)
+        self.edit_buttons_layout.addWidget(self.update_button)
 
-        self.buttonBox.accepted.connect(self.ok_button_click)
-        self.buttonBox.rejected.connect(self.reject)
+        self.buttons_placeholder = QtWidgets.QHBoxLayout()
+        layout.addLayout(self.buttons_placeholder)
+        self.buttons_placeholder.addWidget(self.add_button)
 
+    def exec_create(self) -> None:
+        if self.name_input.text() == '' or (
+                self.parent_input.text() != '' and
+                not self.parent_input.text().isnumeric()):
+            return
+        parent = None if self.parent_input.text() == '' else int(self.parent_input.text())
+        cat = Category(self.name_input.text(), parent)
+        self.create_signal.emit(cat)
 
-class DeleteCategoryForm(QtWidgets.QDialog):
+    def exec_update(self) -> None:
+        if self.name_input.text() == '' or (
+                self.parent_input.text() != '' and
+                not self.parent_input.text().isnumeric()):
+            return
+        parent = None if self.parent_input.text() == '' else int(self.parent_input.text())
+        self.cur_category.parent = parent
+        self.cur_category.name = self.name_input.text()
+        self.update_signal.emit(self.cur_category)
 
-    def __init__(self):
-        super().__init__()
+    def activate_editing_mode(self, category: Category) -> None:
+        self.cur_category = category
+        self.name_input.setText(category.name)
+        parent = str(category.parent) if category.parent is not None else ''
+        self.parent_input.setText(parent)
+        self.buttons_placeholder.itemAt(0).widget().setParent(None)
+        self.buttons_placeholder.addLayout(self.edit_buttons_layout)
 
-        layout = QtWidgets.QFormLayout()
-
-        category_label = QtWidgets.QLabel("Категория")
-        self.category_input = QtWidgets.QLineEdit()
-        layout.addRow(category_label, self.category_input)
-
-        self.buttonBox = QtWidgets.QDialogButtonBox()
-        self._register_buttons()
-        layout.addWidget(self.buttonBox)
-
-        self.setLayout(layout)
-
-    @Slot()
-    def ok_button_click(self):
-        # self.is_ok_clicked = True
-        self.accept()
-
-    def _register_buttons(self):
-        delete_button = QtWidgets.QDialogButtonBox.StandardButton.Ok
-        delete_button.name = 'Удалить'
-        cancel_button = QtWidgets.QDialogButtonBox.StandardButton.Cancel
-        cancel_button.name = 'Отмена'
-        self.buttonBox.addButton(delete_button)
-        self.buttonBox.addButton(cancel_button)
-
-        self.buttonBox.accepted.connect(self.ok_button_click)
-        self.buttonBox.rejected.connect(self.reject)
+    def deactivate_editing_mode(self) -> None:
+        self.cur_category = None
+        self.buttons_placeholder.itemAt(0).layout().setParent(None)
+        self.buttons_placeholder.addWidget(self.add_button)
+        self.name_input.clear()
+        self.parent_input.clear()

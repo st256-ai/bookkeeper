@@ -1,226 +1,152 @@
-import datetime
-from typing import Callable, Any
-
 from PySide6 import QtWidgets, QtCore
-from PySide6.QtCore import Slot
-from PySide6.QtWidgets import QWidget, QFormLayout, QTableWidgetItem, QLineEdit, QComboBox
+from PySide6.QtWidgets import QHeaderView, QAbstractItemView
+
 from bookkeeper.models.expense import Expense
-from bookkeeper.view.exceptions.validation_error import ValidationError
+from bookkeeper.view.common import EditButton, DateWidget
 
 
-class ExpenseWidget(QtWidgets.QWidget):
-    previous_cell_value: str = ''
+class ExpensesWidget(QtWidgets.QWidget):
+    activate_editing_mode_signal = QtCore.Signal(int)
 
-    attributes_to_columns = \
-        {0: 'expense_date', 1: 'amount', 2: 'category', 3: 'comment'}
-
-    def __init__(self,
-                 expense_creator: Callable[[Expense], int],
-                 expense_updater: Callable[[Expense], None],
-                 expense_deleter: Callable[[Expense], None],
-                 expense_getter: Callable[[int], Expense]):
+    def __init__(self) -> None:
         super().__init__()
+        self.expenses: list[Expense] = []
+        self.table = QtWidgets.QTableWidget(20, 5)
 
-        self.expense_creator = expense_creator
-        self.expense_updater = expense_updater
-        self.expense_deleter = expense_deleter
-        self.expense_getter = expense_getter
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(QtWidgets.QLabel('Последние расходы'))
+        layout.addWidget(self.table)
 
-        layout = QtWidgets.QVBoxLayout()
-        button_layout = QtWidgets.QHBoxLayout()
+        self.table.setHorizontalHeaderLabels(
+            [''] + "Дата Сумма Категория Комментарий".split())
+        self.table.verticalHeader().hide()
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
-        self.expense_table = ExpenseTable()
-        self.expense_table.cellClicked.connect(self.cell_clicked)
-        self.expense_table.cellChanged.connect(self.cell_changed)
+    def set_data(self, expenses: list[Expense],
+                 category_id_name_mapping: dict[int, str]) -> None:
+        self.expenses = expenses
+        self.table.setRowCount(len(expenses))
+        for i, exp in enumerate(expenses):
+            self.table.setCellWidget(i, 0,
+                                     EditButton(i, self.activate_editing_mode_signal))
+            self.table.setItem(i, 1, QtWidgets.QTableWidgetItem(
+                str(exp.expense_date.date())))
+            self.table.setItem(i, 2, QtWidgets.QTableWidgetItem(str(exp.amount)))
+            self.table.setItem(i, 3, QtWidgets.QTableWidgetItem(
+                category_id_name_mapping[exp.category]))
+            self.table.setItem(i, 4, QtWidgets.QTableWidgetItem(exp.comment))
 
-        label = QtWidgets.QLabel("<b>Последние Расходы</b>")
-        add_button = QtWidgets.QPushButton("Добавить")
-        add_button.clicked.connect(self.arise_add_dialog_form)
-
-        self.delete_button = QtWidgets.QPushButton("Удалить")
-        self.delete_button.setEnabled(False)
-        self.delete_button.clicked.connect(self.delete_expense_table_row)
-
-        button_layout.addWidget(add_button)
-        button_layout.addWidget(self.delete_button)
-
-        layout.addWidget(label)
-        layout.addWidget(self.expense_table)
-        layout.addLayout(button_layout)
-
-        self.setLayout(layout)
-
-    @Slot()
-    def cell_clicked(self) -> None:
-        self.previous_cell_value = self.expense_table.currentItem().text()
-        self.delete_button.setEnabled(True)
-
-    @Slot()
-    def cell_changed(self) -> None:
-        self.delete_button.setEnabled(False)
-        current_item = self.expense_table.currentItem()
-        pk = current_item.row()
-        column = current_item.column()
-        attr = self.attributes_to_columns.get(column)
-
-        try:
-            expense = self.expense_getter(pk)
-            expense.modify_attr(attr, current_item.text())
-            self.expense_updater(expense)
-        except Exception as ex:
-            if current_item.text() != self.previous_cell_value:
-                current_item.setText(self.previous_cell_value)
-                QtWidgets.QMessageBox.critical(self, "Ошибка", str(ex))
-
-    @Slot()
-    def delete_expense_table_row(self):
-        row = self.expense_table.currentRow()
-        self.expense_table.delete_row(row)
-        self.delete_button.setEnabled(False)
-
-        try:
-            expense = self.expense_getter(row)
-            self.expense_deleter(expense)
-        except Exception as ex:
-            QtWidgets.QMessageBox.critical(self, "Ошибка", str(ex))
-
-    @Slot()
-    def arise_add_dialog_form(self):
-        add_form = AddDialogForm()
-        add_form.exec()
-        if add_form.is_ok_clicked:
-            values_dict = add_form.get_data_from_forms()
-            self.validate_values(values_dict)
-            self.expense_table.add_new_row(values_dict)
-            add_form.is_ok_clicked = False
-
-            try:
-                expense = self.map_to_expense(values_dict)
-                self.expense_creator(expense)
-            except Exception as ex:
-                QtWidgets.QMessageBox.critical(self, "Ошибка", str(ex))
-
-    @staticmethod
-    def map_to_expense(values_dict: dict[Any]) -> Expense:
-        expense = Expense()
-        for (key, value) in values_dict:
-            expense.modify_attr(key, value)
-        expense.added_date = datetime.datetime.now()
-
-    @staticmethod
-    def validate_values(values_dict: dict[Any]) -> None:
-        mandatory_params = values_dict
-        mandatory_params.pop("comment")
-        for (key, value) in mandatory_params:
-            if value is None:
-                raise ValidationError(key)
+    def set_edit_buttons_active(self, is_active: bool) -> None:
+        for i in range(self.table.rowCount()):
+            self.table.cellWidget(i, 0).setDisabled(not is_active)
 
 
-class ExpenseTable(QtWidgets.QTableWidget):
+class AddExpensesWidget(QtWidgets.QWidget):
+    cancel_signal = QtCore.Signal()
+    delete_signal = QtCore.Signal(int)
+    update_signal = QtCore.Signal(Expense, str)
+    create_signal = QtCore.Signal(Expense, str)
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.setColumnCount(4)
-        self.setHorizontalHeaderLabels(["Дата", "Сумма", "Категория", "Комментарий"])
-        self.stretch_table_elements()
+        self.cur_expense: Expense | None = None
+        layout = QtWidgets.QVBoxLayout(self)
 
-    def stretch_table_elements(self) -> None:
-        for h in [self.horizontalHeader()]:
-            h.setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        date_layout = QtWidgets.QHBoxLayout()
+        sum_layout = QtWidgets.QHBoxLayout()
+        cat_layout = QtWidgets.QHBoxLayout()
+        comment_layout = QtWidgets.QHBoxLayout()
 
-    def add_new_row(self,
-                    value_dict: dict) -> None:
-        next_row = self.rowCount()
-        self.insertRow(next_row)
+        label = QtWidgets.QLabel('Дата')
+        label.setFixedWidth(100)
+        date_layout.addWidget(label)
+        self.date_input = DateWidget()
+        date_layout.addWidget(self.date_input)
 
-        date = value_dict.get("expense_date")
-        amount = value_dict.get("amount")
-        category_id = value_dict.get("category")
-        comment = value_dict.get("comment")
+        label = QtWidgets.QLabel('Сумма')
+        label.setFixedWidth(100)
+        sum_layout.addWidget(label)
+        self.sum_input = QtWidgets.QLineEdit()
+        sum_layout.addWidget(self.sum_input)
 
-        self.setItem(next_row, 0, QTableWidgetItem(date))
-        self.setItem(next_row, 1, QTableWidgetItem(f"{amount}"))
-        self.setItem(next_row, 2, QTableWidgetItem(f"{category_id}"))
-        self.setItem(next_row, 3, QTableWidgetItem(comment))
+        label = QtWidgets.QLabel('Категория')
+        label.setFixedWidth(100)
+        cat_layout.addWidget(label)
+        self.cat_input = QtWidgets.QComboBox()
+        cat_layout.addWidget(self.cat_input)
 
-    def delete_row(self, row: int) -> None:
-        self.removeRow(row)
+        label = QtWidgets.QLabel('Комментарий')
+        label.setFixedWidth(100)
+        comment_layout.addWidget(label)
+        self.comment_input = QtWidgets.QLineEdit()
+        comment_layout.addWidget(self.comment_input)
 
+        layout.addWidget(QtWidgets.QLabel('Добавить новую запись'))
+        layout.addLayout(date_layout)
+        layout.addLayout(sum_layout)
+        layout.addLayout(cat_layout)
+        layout.addLayout(comment_layout)
 
-class DateWidget(QtWidgets.QDateEdit):
-    def __init__(self, date: QtCore.QDate = QtCore.QDate.currentDate()) -> None:
-        super().__init__(date)
-        self.setCalendarPopup(True)
-        self.setDisplayFormat('dd.MM.yyyy')
-        calendar = self.calendarWidget()
-        calendar.setFirstDayOfWeek(QtCore.Qt.DayOfWeek.Monday)
-        calendar.setGridVisible(True)
+        self.add_button = QtWidgets.QPushButton('Добавить')
+        self.cancel_button = QtWidgets.QPushButton('Отмена')
+        self.delete_button = QtWidgets.QPushButton('Удалить')
+        self.update_button = QtWidgets.QPushButton('Сохранить')
 
+        self.add_button.clicked.connect(self.exec_create)
+        self.cancel_button.clicked.connect(lambda _: self.cancel_signal.emit())
+        self.delete_button.clicked.connect(
+            lambda _: self.delete_signal.emit(self.cur_expense.pk))
+        self.update_button.clicked.connect(self.exec_update)
 
-class AddDialogForm(QtWidgets.QDialog):
-    is_ok_clicked: bool = False
+        self.edit_buttons_layout = QtWidgets.QHBoxLayout()
+        self.edit_buttons_layout.addWidget(self.cancel_button)
+        self.edit_buttons_layout.addWidget(self.delete_button)
+        self.edit_buttons_layout.addWidget(self.update_button)
 
-    date_input: DateWidget
-    amount_input: QLineEdit
-    category_input: QComboBox
-    comment_input: QLineEdit
+        self.buttons_placeholder = QtWidgets.QHBoxLayout()
+        layout.addLayout(self.buttons_placeholder)
+        self.buttons_placeholder.addWidget(self.add_button)
 
-    def __init__(self):
-        super().__init__()
+    def exec_create(self) -> None:
+        if self.sum_input.text() == '' or not self.sum_input.text().isnumeric():
+            return
+        exp = Expense(amount=int(self.sum_input.text()),
+                      category=0,
+                      expense_date=self.date_input.dateTime().toPython(),
+                      comment=self.comment_input.text())
+        self.create_signal.emit(exp, self.cat_input.currentText())
 
-        layout = QtWidgets.QFormLayout()
+    def exec_update(self) -> None:
+        if self.sum_input.text() == '' or not self.sum_input.text().isnumeric():
+            return
+        self.cur_expense.amount = int(self.sum_input.text())
+        self.cur_expense.comment = self.comment_input.text()
+        self.cur_expense.expense_date = self.date_input.dateTime().toPython()
+        self.update_signal.emit(self.cur_expense, self.cat_input.currentText())
 
-        self.date_input = self._register_input_form("Дата", layout, DateWidget())
-        self.amount_input = self._register_input_form("Сумма", layout, QLineEdit())
-        self._register_category_input_form(layout)
-        self.comment_input = self._register_input_form("Комментарий", layout, QLineEdit())
+    def activate_editing_mode(self, expense: Expense, cat_name: str) -> None:
+        self.cur_expense = expense
+        self.sum_input.setText(str(expense.amount))
+        self.cat_input.setCurrentText(cat_name)
+        self.comment_input.setText(expense.comment)
+        self.date_input.setDate(QtCore.QDate(expense.expense_date.year,
+                                             expense.expense_date.month,
+                                             expense.expense_date.day))
+        self.buttons_placeholder.itemAt(0).widget().setParent(None)
+        self.buttons_placeholder.addLayout(self.edit_buttons_layout)
 
-        self.buttonBox = QtWidgets.QDialogButtonBox()
-        self._register_buttons()
+    def deactivate_editing_mode(self) -> None:
+        self.cur_expense = None
+        self.buttons_placeholder.itemAt(0).layout().setParent(None)
+        self.buttons_placeholder.addWidget(self.add_button)
 
-        main_layout = QtWidgets.QVBoxLayout()
-        main_layout.addLayout(layout)
-        main_layout.addWidget(self.buttonBox)
-        self.setLayout(main_layout)
-
-    @Slot()
-    def ok_button_click(self):
-        self.is_ok_clicked = True
-        self.accept()
-
-    def exec(self):
-        super().exec()
-
-    def _register_buttons(self):
-        ok_button = QtWidgets.QDialogButtonBox.StandardButton.Ok
-        cancel_button = QtWidgets.QDialogButtonBox.StandardButton.Cancel
-        self.buttonBox.addButton(ok_button)
-        self.buttonBox.addButton(cancel_button)
-
-        self.buttonBox.accepted.connect(self.ok_button_click)
-        self.buttonBox.rejected.connect(self.reject)
-
-    @staticmethod
-    def _register_input_form(text: str,
-                             layout: QFormLayout,
-                             widget: QWidget) -> QWidget:
-        label_with_text = QtWidgets.QLabel(text)
-        layout.addRow(label_with_text, widget)
-        return widget
-
-    # TODO IMPLEMENT
-    def _register_category_input_form(self,
-                                      layout: QFormLayout):
-        label_with_text = QtWidgets.QLabel("Категория")
-        self.category_input.setPlaceholderText('Выбрать')
-        self.category_input.addItems(self.ctg_options)
-
-    def get_data_from_forms(self) -> dict:
-        date: str = self.date_input.date().toString('dd-MM-yyyy')
-        amount: int = int(self.amount_input.text())
-        category: int = int(self.category_input.currentIndex())
-        comment: str = self.comment_input.text()
-        return {"expense_date": date, "amount": amount, "category": category, "comment": comment}
-
-    def set_categories(self, categories: list[(str, str)]):
-        self.category_input.addItems([c.name for c in categories])
+        self.sum_input.clear()
+        self.cat_input.setCurrentIndex(0)
+        self.comment_input.clear()
+        self.date_input.setDate(QtCore.QDate.currentDate())

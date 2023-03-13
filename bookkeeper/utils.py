@@ -4,7 +4,7 @@
 import sqlite3
 from typing import Iterable, Iterator
 
-from bookkeeper.models.budget import Budget, Period
+from bookkeeper.models.budget import Budget
 from bookkeeper.models.category import Category
 from bookkeeper.models.expense import Expense
 from bookkeeper.repository.abstract_repository import AbstractRepository
@@ -138,7 +138,7 @@ def init_db_if_needed(category_repo: AbstractRepository[Category],
 
     Category.create_from_tree(read_tree(INIT_CATEGORIES), category_repo)
 
-    budget_repo.add(Budget(1000, 0, Period.DAY.name, 0))
-    budget_repo.add(Budget(7000, 0, Period.WEEK.name, 0))
-    budget_repo.add(Budget(30000, 0, Period.MONTH.name, 0))
+    # budget_repo.add(Budget(1000, 0, Period.DAY.name, 0))
+    # budget_repo.add(Budget(7000, 0, Period.WEEK.name, 0))
+    # budget_repo.add(Budget(30000, 0, Period.MONTH.name, 0))
     print()
