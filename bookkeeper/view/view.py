@@ -49,24 +49,3 @@ class View(AbstractView):
 
     def update_consumptions(self, consumptions: list[int]) -> None:
         self.window.update_consumptions(consumptions)
-
-    def register_expense_getter(self, handler: Callable[[int], Expense]) -> None:
-        self.window.expense_getter = handler
-
-    def register_category_creator(self, handler: Callable[[Category], int]) -> None:
-        self.window.category_creator = handler
-
-    def register_category_deleter(self, handler: Callable[[int], None]) -> None:
-        self.window.category_deleter = handler
-
-    def register_budget_updater(self, handler: Callable[[Budget], None]) -> None:
-        self.window.set_budget_updater(handler)
-
-    def register_expense_creator(self, handler: Callable[[Expense], int]) -> None:
-        self.window.expense_creator = handler
-
-    def register_expense_updater(self, handler: Callable[[Expense], None]) -> None:
-        self.window.expense_updater = handler
-
-    def register_expense_deleter(self, handler: Callable[[Expense], None]) -> None:
-        self.window.expense_deleter = handler
