@@ -1,24 +1,19 @@
 """
-Модель бюджета
+Описан класс, представляющий бюджет
 """
 
 from dataclasses import dataclass
-from enum import Enum
-
-Period = Enum('Period', ["DAY", "WEEK", "MONTH"])
 
 
-@dataclass(slots=True)
+@dataclass
 class Budget:
     """
-    Сущность, моделирующая бюджет
-    total_amount - сумма бюджета
-    consumed_amount - потраченная сумма
-    period - срок ограничения на сумму бюджета
-    pk - id записи в базе данных (primary key)
+    Бюджет
+    хранит срок (duration),
+    категорию расходов (category)
+    и сумму (amount)
     """
-
-    total_amount: int
-    consumed_amount: int
-    period: str
+    duration: int
+    category: int | None
+    amount: int
     pk: int = 0
