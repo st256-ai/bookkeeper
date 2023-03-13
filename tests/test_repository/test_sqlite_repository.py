@@ -35,7 +35,7 @@ def repo(custom_class, create_bd):
 
 def test_mapper(repo):
     row = (10, 11, "test_mapper")
-    obj = repo._map_row(row)
+    obj = repo.generate_object(row)
     assert obj.pk == 10
     assert obj.field_1 == 11
     assert obj.field_2 == "test_mapper"

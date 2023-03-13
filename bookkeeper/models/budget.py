@@ -20,5 +20,5 @@ class Budget:
 
     total_amount: int
     consumed_amount: int
-    period: Period
+    period: str
     pk: int = 0

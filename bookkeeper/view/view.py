@@ -1,6 +1,6 @@
 import sys
 from typing import Callable
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtGui
 
 from bookkeeper.models.budget import Budget
 from bookkeeper.models.category import Category
@@ -10,12 +10,31 @@ from bookkeeper.view.main_window import MainWindow
 
 
 class View(AbstractView):
-    def __init__(self) -> None:
+    BOOKKEEPER_APP_LOGO_PATH: str = "../../resources/logo.png"
+
+    def __init__(self,
+                 category_creator: Callable[[Category], int],
+                 category_deleter: Callable[[int], None],
+                 budget_updater: Callable[[Budget], None],
+                 expense_getter: Callable[[int], Expense],
+                 expense_creator: Callable[[Expense], int],
+                 expense_updater: Callable[[Expense], None],
+                 expense_deleter: Callable[[Expense], None]) -> None:
         super().__init__()
         self.app = QtWidgets.QApplication(sys.argv)
-        self.window = MainWindow()
+
+        self.window = MainWindow(
+            category_creator, category_deleter, budget_updater,
+            expense_getter, expense_creator, expense_updater,
+            expense_deleter
+        )
 
     def run(self) -> None:
+        window_icon = QtGui.QIcon()
+        window_icon.addFile(self.BOOKKEEPER_APP_LOGO_PATH)
+        self.window.setWindowIcon(window_icon)
+        self.window.setWindowTitle("Bookkeeper")
+
         self.window.show()
         sys.exit(self.app.exec())
 
@@ -41,7 +60,7 @@ class View(AbstractView):
         self.window.category_deleter = handler
 
     def register_budget_updater(self, handler: Callable[[Budget], None]) -> None:
-        self.window.budget_updater = handler
+        self.window.set_budget_updater(handler)
 
     def register_expense_creator(self, handler: Callable[[Expense], int]) -> None:
         self.window.expense_creator = handler

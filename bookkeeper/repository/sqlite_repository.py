@@ -4,6 +4,7 @@
 
 import logging
 import sqlite3
+from datetime import datetime
 from inspect import get_annotations
 from typing import Any
 
@@ -14,6 +15,9 @@ class SQLiteRepository(AbstractRepository[T]):
     """
     Репозиторий, предназначенный для работы с СУБД SQLite
     """
+
+    DEFAULT_DATE_FORMAT: str
+    DEFAULT_DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 
     def __init__(self, db_file: str, clazz: type) -> None:
         self.db_file = db_file
@@ -34,14 +38,24 @@ class SQLiteRepository(AbstractRepository[T]):
             'delete': f"DELETE FROM {self.table_name} WHERE ROWID = ?",
         }
 
-    def _map_row(self, values: list[Any]) -> T:
-        """  Метод преобразует запись из SQLite БД в объект типа T  """
-        class_args = {}
-        for field_name, field_value in zip(self.fields.keys(), values[1:]):
-            class_args[field_name] = field_value
+    def generate_object(self, fields: dict[str, type], values: list[Any]) -> T:
+        """
+        Вспомогательный метод, используемый для генерации объектов класса T
+        из значений, хранящихся в базе данных.
+        """
+        class_arguments = {}
 
-        obj: T = self.entity_class(**class_args)
+        for field_name, field_value in zip(fields.keys(), values[1:]):
+            field_type = fields[field_name]
+
+            if field_type == datetime:
+                field_value = datetime.strptime(field_value, self.DEFAULT_DATE_FORMAT)
+
+            class_arguments[field_name] = field_value
+
+        obj = self.entity_class(**class_arguments)
         obj.pk = values[0]
+
         return obj
 
     def add(self, obj: T) -> int:
@@ -76,8 +90,8 @@ class SQLiteRepository(AbstractRepository[T]):
             return None
         if rows_number > 1:
             raise ValueError(f"Several entries found for provided pk={pk}")
-
-        execution_result = self._map_row(rows[0])
+        row = rows[0]
+        execution_result = self.generate_object(self.fields, row[1:])
         logging.info("Exiting get method with: %s", execution_result)
         return execution_result
 
@@ -95,7 +109,7 @@ class SQLiteRepository(AbstractRepository[T]):
                 rows = cursor.execute(query).fetchall()
         connection.close()
 
-        execution_result = [self._map_row(row) for row in rows]
+        execution_result = [self.generate_object(self.fields, row[1:]) for row in rows]
         logging.debug("Exiting get_all method with: %s", execution_result)
         return execution_result
 
