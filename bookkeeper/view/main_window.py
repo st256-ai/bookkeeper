@@ -1,7 +1,10 @@
 from datetime import datetime, timedelta
 from typing import Callable
 
-from PySide6 import QtWidgets
+from PySide6 import QtGui
+
+from PySide6.QtWidgets import (QMainWindow, QWidget,
+                               QTabWidget, QVBoxLayout, QTableWidgetItem)
 
 from bookkeeper.models.budget import Budget
 from bookkeeper.models.category import Category
@@ -11,10 +14,12 @@ from bookkeeper.view.category import CategoryWidget, AddCategoryWidget
 from bookkeeper.view.expense import ExpensesWidget, AddExpensesWidget
 
 
-class MainWindow(QtWidgets.QMainWindow):
+class MainWindow(QMainWindow):
     DAY = 1
     WEEK = 7
     MONTH = 30
+
+    BOOKKEEPER_APP_LOGO_PATH: str = "../../resources/logo.png"
 
     def __init__(self) -> None:
         super().__init__()
@@ -34,20 +39,25 @@ class MainWindow(QtWidgets.QMainWindow):
         self.expense_deleter: Callable[[int], None] = lambda x: None
 
         self.setWindowTitle('Bookkeeper')
-        self.setFixedSize(800, 800)
+        self.setFixedSize(800, 600)
 
-        central_widget = QtWidgets.QWidget(self)
+        window_icon = QtGui.QIcon()
+        window_icon.addFile(self.BOOKKEEPER_APP_LOGO_PATH)
+        self.setWindowIcon(window_icon)
+        self.setWindowTitle("Bookkeeper")
+
+        central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
 
-        tabs = QtWidgets.QTabWidget(central_widget)
+        tabs = QTabWidget(central_widget)
         tabs.resize(self.size())
 
-        main_tab = QtWidgets.QWidget()
-        category_tab = QtWidgets.QWidget()
+        main_tab = QWidget()
+        category_tab = QWidget()
         tabs.addTab(main_tab, "Траты")
         tabs.addTab(category_tab, "Категории")
 
-        main_layout = QtWidgets.QVBoxLayout(main_tab)
+        main_layout = QVBoxLayout(main_tab)
         self.expenses_table = ExpensesWidget()
         self.budget_table = BudgetWidget()
         self.add_expense = AddExpensesWidget()
@@ -56,7 +66,7 @@ class MainWindow(QtWidgets.QMainWindow):
         main_layout.addWidget(self.budget_table)
         main_layout.addWidget(self.add_expense)
 
-        category_layout = QtWidgets.QVBoxLayout(category_tab)
+        category_layout = QVBoxLayout(category_tab)
         self.category_table = CategoryWidget()
         self.add_category = AddCategoryWidget()
 
@@ -152,7 +162,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 month_ex += ex.amount
         self.budget_table.set_expenses([day_ex, week_ex, month_ex])
 
-    def on_budget_item_changed(self, item: QtWidgets.QTableWidgetItem) -> None:
+    def on_budget_item_changed(self, item: QTableWidgetItem) -> None:
         old_budgets = self.budget_table.budgets
         if item.column() == 1 and item.text() != '':
             if old_budgets[item.row()] is None:

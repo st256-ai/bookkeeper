@@ -6,7 +6,9 @@ import logging
 import sqlite3
 from datetime import datetime
 from inspect import get_annotations
-from typing import Any
+from sqlite3 import Connection
+from types import UnionType
+from typing import Any, get_args
 
 from bookkeeper.repository.abstract_repository import AbstractRepository, T
 
@@ -26,10 +28,20 @@ class SQLiteRepository(AbstractRepository[T]):
         self.fields.pop('pk')
         self.entity_class = clazz
 
+        definition_strings = [
+            f'{f_name} {self.__class__._resolve_type(f_type)}'
+            for f_name, f_type in self.fields.items()
+        ]
+
+        self.create_sql = f'CREATE TABLE IF NOT EXISTS {self.table_name} (' \
+                     + f'{", ".join(definition_strings + ["pk INTEGER PRIMARY KEY"])}' \
+                     + ')'
+        self.init_model_table()
+
         names = ", ".join(self.fields.keys())
         placeholder = ", ".join("?" * len(self.fields))
         upd_placeholder = ", ".join([f"{field}=?" for field in self.fields.keys()])
-        self.queries = {
+        self.prepared_queries = {
             'foreign_keys': "PRAGMA foreign_keys = ON",
             'add': f"INSERT INTO {self.table_name} ({names}) VALUES ({placeholder})",
             'get': f"SELECT ROWID, * FROM {self.table_name} WHERE ROWID = ?",
@@ -37,6 +49,31 @@ class SQLiteRepository(AbstractRepository[T]):
             'update': f"UPDATE {self.table_name} SET {upd_placeholder} WHERE ROWID = ?",
             'delete': f"DELETE FROM {self.table_name} WHERE ROWID = ?",
         }
+
+    def init_model_table(self):
+        with self.connect() as con:
+            cur = con.cursor()
+            cur.execute('PRAGMA foreign_keys = ON')
+            cur.execute(self.create_sql)
+        con.close()
+
+    def connect(self) -> Connection:
+        return sqlite3.connect(
+            self.db_file, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
+
+    @staticmethod
+    def _resolve_type(obj_type: type) -> str:
+        if issubclass(UnionType, obj_type):
+            obj_type = get_args(obj_type)
+        if issubclass(str, obj_type):
+            return 'TEXT'
+        if issubclass(int, obj_type):
+            return 'INTEGER'
+        if issubclass(float, obj_type):
+            return 'REAL'
+        if issubclass(datetime, obj_type):
+            return 'TIMESTAMP'
+        return 'TEXT'
 
     def generate_object(self, fields: dict[str, type], values: list[Any]) -> T:
         """
@@ -68,8 +105,8 @@ class SQLiteRepository(AbstractRepository[T]):
 
         with sqlite3.connect(self.db_file) as connection:
             cursor = connection.cursor()
-            cursor.execute(self.queries['foreign_keys'])
-            cursor.execute(self.queries['add'], values)
+            cursor.execute(self.prepared_queries['foreign_keys'])
+            cursor.execute(self.prepared_queries['add'], values)
         connection.close()
 
         if cursor.lastrowid is not None:
@@ -82,7 +119,7 @@ class SQLiteRepository(AbstractRepository[T]):
         logging.debug("Starting get method with pk = %d", pk)
         with sqlite3.connect(self.db_file) as connection:
             cursor = connection.cursor()
-            rows = cursor.execute(self.queries['get'], [pk]).fetchall()
+            rows = cursor.execute(self.prepared_queries['get'], [pk]).fetchall()
         connection.close()
 
         rows_number = len(rows)
@@ -91,14 +128,14 @@ class SQLiteRepository(AbstractRepository[T]):
         if rows_number > 1:
             raise ValueError(f"Several entries found for provided pk={pk}")
         row = rows[0]
-        execution_result = self.generate_object(self.fields, row[1:])
+        execution_result = self.generate_object(self.fields, row)
         logging.info("Exiting get method with: %s", execution_result)
         return execution_result
 
     def get_all(self, where: dict[str, Any] | None = None) -> list[T]:
         logging.debug("Starting get_all method with where = %s", where)
 
-        query = self.queries['get_all']
+        query = self.prepared_queries['get_all']
         with sqlite3.connect(self.db_file) as connection:
             cursor = connection.cursor()
 
@@ -109,7 +146,7 @@ class SQLiteRepository(AbstractRepository[T]):
                 rows = cursor.execute(query).fetchall()
         connection.close()
 
-        execution_result = [self.generate_object(self.fields, row[1:]) for row in rows]
+        execution_result = [self.generate_object(self.fields, row) for row in rows]
         logging.debug("Exiting get_all method with: %s", execution_result)
         return execution_result
 
@@ -125,8 +162,8 @@ class SQLiteRepository(AbstractRepository[T]):
 
         with sqlite3.connect(self.db_file) as connection:
             cursor = connection.cursor()
-            cursor.execute(self.queries['foreign_keys'])
-            cursor.execute(self.queries['update'], values)
+            cursor.execute(self.prepared_queries['foreign_keys'])
+            cursor.execute(self.prepared_queries['update'], values)
 
             if cursor.rowcount == 0:
                 raise ValueError(f"Unable to update object with pk={obj.pk}")
@@ -139,7 +176,7 @@ class SQLiteRepository(AbstractRepository[T]):
         with sqlite3.connect(self.db_file) as connection:
             cursor = connection.cursor()
 
-            cursor.execute(self.queries['delete'], [pk])
+            cursor.execute(self.prepared_queries['delete'], [pk])
             if cursor.rowcount == 0:
                 raise ValueError(f"Unable to delete object with pk={pk}")
         connection.close()

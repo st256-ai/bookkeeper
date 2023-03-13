@@ -1,5 +1,6 @@
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime
 
 import pytest
 
@@ -33,12 +34,13 @@ def repo(custom_class, create_bd):
     return SQLiteRepository(db_file=DB_FILE, clazz=custom_class)
 
 
-def test_mapper(repo):
-    row = (10, 11, "test_mapper")
-    obj = repo.generate_object(row)
-    assert obj.pk == 10
-    assert obj.field_1 == 11
-    assert obj.field_2 == "test_mapper"
+def test_resolve_type(repo):
+    assert repo._resolve_type(type('abc')) == 'TEXT'
+    assert repo._resolve_type(type(1)) == 'INTEGER'
+    assert repo._resolve_type(type(1.23)) == 'REAL'
+    assert repo._resolve_type(type([])) == 'TEXT'
+    assert repo._resolve_type(type(datetime.now())) == 'TIMESTAMP'
+    assert repo._resolve_type(type(int | None)) == 'TEXT'
 
 
 def test_condition_adding(repo):

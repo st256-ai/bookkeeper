@@ -45,7 +45,7 @@ class Bookkeeper:
         Category.create_from_tree(read_tree(INIT_CATEGORIES), self.category_repo)
         self.expense_repo.add(Expense(120, 1, comment='comment1'))
         self.expense_repo.add(Expense(900, 7, comment='comment2'))
-        # bud_repo.add(Budget(1, None, 1000))
+        self.budget_repo.add(Budget(1, None, 1000))
         self.budget_repo.add(Budget(7, None, 7000))
         self.budget_repo.add(Budget(30, None, 30000))
 
@@ -90,7 +90,7 @@ exp_repo = SQLiteRepository[Expense](DB_PATH, Expense)
 bud_repo = SQLiteRepository[Budget](DB_PATH, Budget)
 
 bk = Bookkeeper(app_view, cat_repo, exp_repo, bud_repo)
-if db_init_needed:
-    bk.init_db()
+#if db_init_needed:
+bk.init_db()
 
 bk.run()
