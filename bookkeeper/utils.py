@@ -4,6 +4,18 @@
 
 from typing import Iterable, Iterator
 
+DB_PATH = '../resources/database.db'
+
+INIT_CATEGORIES = '''
+продукты
+    мясо
+        сырое мясо
+        мясные продукты
+    сладости
+книги
+одежда
+'''.splitlines()
+
 
 def _get_indent(line: str) -> int:
     return len(line) - len(line.lstrip())
